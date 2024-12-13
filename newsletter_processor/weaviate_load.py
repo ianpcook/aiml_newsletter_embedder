@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.INFO)
 
 client = weaviate.Client("http://localhost:8080")
 
-data_path = os.path.abspath(os.path.join(os.getcwd(), 'data', 'tldr_records.json'))
+data_path = os.path.abspath(os.path.join(os.getcwd(), 'data', 'newsletter_records.json'))
 with open(data_path, 'r') as f:
     data = json.load(f)
 

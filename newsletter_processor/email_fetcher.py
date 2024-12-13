@@ -81,7 +81,8 @@ class EmailFetcher:
             email_data['id'] = msg['Message-ID']
             email_data['subject'] = str(make_header(decode_header(msg['Subject'])))
             email_data['from'] = msg['From']
-            email_data['date'] = datetime.strptime(msg['date'], "%a, %d %b %Y %H:%M:%S %z").isoformat()
+            date_str = msg['date'].replace(" (UTC)", "")  # Remove (UTC) if present
+            email_data['date'] = datetime.strptime(date_str, "%a, %d %b %Y %H:%M:%S %z").isoformat()
             
 
             body = self._get_text_from_email(msg)

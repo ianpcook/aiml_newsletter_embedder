@@ -1,6 +1,6 @@
-class TLDRSplitter:
+class ContentSplitter:
     """
-    TLDRSplitter is a class to parse the body of the TLDR Newsletter emails.
+    ContentSplitter is a class to parse the body of the TLDR Newsletter emails.
     It splits the content into sections based on predefined delimiters.
     """ 
     def __init__(self) -> None:

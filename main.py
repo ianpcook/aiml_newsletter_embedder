@@ -14,6 +14,8 @@ if __name__ == '__main__':
         output_file=output_file,
         error_file=error_file
     )
+    print("Email:", os.getenv('EMAIL_ADDRESS'))
+    print("Password length:", len(os.getenv('EMAIL_PASSWORD') or ''))
     emails = newsletter_processor.fetch_emails()
     # Run the asynchronous code
     asyncio.run(newsletter_processor.process_emails(emails, concurrent_limit=15))
