@@ -2,8 +2,8 @@ import os
 import json
 import asyncio
 from dotenv import load_dotenv
-from email_fetcher import EmailFetcher
-from tldr.tldr_splitter import TLDRSplitter
+from .email_fetcher import EmailFetcher
+from .content_splitter import ContentSplitter
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import (
     AIMessage,
@@ -12,7 +12,7 @@ from langchain.schema import (
 )
 import logging
 
-from tldr.tldr_few_shot import system_message, example_in, example_out
+from .few_shot_examples import system_message, example_in, example_out
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 load_dotenv()  # Load environment variables from the .env file
@@ -23,9 +23,9 @@ class NewsletterProcessor:
     It fetches emails, splits them into sections, and processes the content
     with a chat model.
     """
-    def __init__(self, user_email: str, output_file: str, error_file: str, splitter_class, newsletter_email: str = 'dan@tldrnewsletter.com') -> None:
+    def __init__(self, user_email: str, output_file: str, error_file: str, splitter_class, label: str = None) -> None:
         self.user_email = user_email
-        self.newsletter_email = newsletter_email
+        self.label = label or '_News/AIML'  # Default to '_News/AIML' if no label provided
         self.email_fetcher = EmailFetcher(self.user_email)
         self.splitter = splitter_class()
         self.chat = ChatOpenAI(temperature=.4, max_retries=0, max_tokens=2400)
@@ -39,7 +39,7 @@ class NewsletterProcessor:
 
     def fetch_emails(self) -> list[dict]:
         self.email_fetcher.connect()
-        emails_d = self.email_fetcher.fetch_emails(self.newsletter_email, self.output_file)
+        emails_d = self.email_fetcher.fetch_emails(self.label, self.output_file)
         self.email_fetcher.disconnect()
         logging.info(f"Fetched {len(emails_d)} emails")
         return emails_d

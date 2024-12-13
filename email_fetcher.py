@@ -54,8 +54,14 @@ class EmailFetcher:
             message_ids[email_id] = message_id
         return message_ids
 
-    def fetch_emails(self, sender_email: str, processed_email_output_path: str) -> list[dict]:
-        status, response = self.mail.search(None, f'FROM "{sender_email}"')
+    def fetch_emails(self, label: str, processed_email_output_path: str) -> list[dict]:
+        # Gmail labels need to be accessed with their full path including parent labels
+        status, response = self.mail.select(f'"{label}"')
+        if status != 'OK':
+            raise ValueError(f'Label "{label}" not found')
+            
+        # Search for all emails in the label
+        status, response = self.mail.search(None, 'ALL')
         email_binary_ids = response[0].split()
         email_ids = self.get_message_ids(self.mail, email_binary_ids)
         email_list = []
