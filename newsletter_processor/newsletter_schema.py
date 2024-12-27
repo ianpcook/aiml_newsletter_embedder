@@ -66,7 +66,10 @@ newsletter_class_obj = {
           "skip": True,
           "vectorizePropertyName": False
         }
-      }
+    },
+    "tokenization": "field",
+    "indexInverted": True,
+    "uniqueConstraint": True
   }
 ]
 }

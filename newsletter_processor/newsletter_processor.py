@@ -39,6 +39,11 @@ class NewsletterProcessor:
 
     def fetch_emails(self) -> list[dict]:
         self.email_fetcher.connect()
+        # Log the number of existing emails before fetching
+        with open(self.output_file, 'r') as f:
+            existing_records = json.load(f)
+            logging.info(f"Current records in {self.output_file}: {len(existing_records)}")
+            
         emails_d = self.email_fetcher.fetch_emails(self.label, self.output_file)
         self.email_fetcher.disconnect()
         logging.info(f"Fetched {len(emails_d)} emails")
@@ -120,4 +125,3 @@ class NewsletterProcessor:
                         l.append(error_data)
                 with open(self.error_file, 'w') as f:
                     json.dump(l, f, indent=4)
-

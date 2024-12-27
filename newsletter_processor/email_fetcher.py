@@ -36,22 +36,43 @@ class EmailFetcher:
             if part.get_content_type() == 'text/plain':
                 return part.get_payload(decode=True)
 
-    def load_existing_emails(self, path) -> list[dict]:
+    def load_existing_emails(self, path: str) -> list[dict]:
         if os.path.exists(path):
             with open(path, 'r') as f:
                 existing_emails = json.load(f)
-        else:
-            existing_emails = []
-        logging.info(f"Loaded {len(existing_emails)} existing emails")
-        return existing_emails
+                logging.info(f"Loaded {len(existing_emails)} existing emails from {path}")
+                # Log some sample IDs for debugging
+                if existing_emails:
+                    # Normalize existing IDs
+                    for email in existing_emails:
+                        if 'id' in email:
+                            email['id'] = email['id'].strip('<>').strip()
+                    sample_ids = [email['id'] for email in existing_emails[:3]]
+                    logging.debug(f"Sample existing email IDs: {sample_ids}")
+                return existing_emails
+        return []
 
     def get_message_ids(self, mail, email_ids):
         message_ids = {}
         for email_id in email_ids:
             _, response = mail.fetch(email_id, '(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])')
             message_id_header = response[0][1].decode()
-            message_id = message_id_header.strip().split(': ')[1]
-            message_ids[email_id] = message_id
+            try:
+                # Handle both Message-ID and Message-Id formats
+                if 'Message-ID:' in message_id_header:
+                    message_id = message_id_header.split('Message-ID:', 1)[1].strip()
+                elif 'Message-Id:' in message_id_header:
+                    message_id = message_id_header.split('Message-Id:', 1)[1].strip()
+                else:
+                    logging.warning(f"No Message-ID found in header: {message_id_header}")
+                    continue
+                
+                # Clean the ID by removing angle brackets and whitespace
+                message_ids[email_id] = message_id.strip('<>').strip()
+                logging.debug(f"Successfully parsed Message-ID: {message_ids[email_id]}")
+            except Exception as e:
+                logging.warning(f"Error parsing Message-ID from header: {message_id_header}. Error: {str(e)}")
+                continue
         return message_ids
 
     def fetch_emails(self, label: str, processed_email_output_path: str) -> list[dict]:
@@ -68,17 +89,34 @@ class EmailFetcher:
 
         existing_emails = self.load_existing_emails(processed_email_output_path)
         existing_ids = {email['id'] for email in existing_emails}
+        
+        # Log the first few existing IDs for debugging
+        if existing_ids:
+            sample_existing = list(existing_ids)[:3]
+            logging.info(f"Sample existing IDs: {sample_existing}")
+            
         new_ids = [k for k, v in email_ids.items() if v not in existing_ids]
-        logging.info(f"Found {len(new_ids)} new emails")
+        logging.info(f"Found {len(new_ids)} new emails out of {len(email_ids)} total emails in the label")
+        
+        if new_ids:
+            sample_new = [email_ids[k] for k in new_ids[:3]]
+            logging.info(f"Sample new email IDs: {sample_new}")
 
         for i, email_id in enumerate(new_ids):
             email_data = {}
             _, msg_data = self.mail.fetch(email_id, '(RFC822)')
             msg = email.message_from_bytes(msg_data[0][1])
-            if msg['Message-ID'] in existing_ids:
+            msg_id = msg['Message-ID']
+            if msg_id:
+                msg_id = msg_id.strip('<>').strip()
+            
+            if msg_id in existing_ids:
+                logging.debug(f"Skipping already processed email with ID: {msg_id}")
                 continue
 
-            email_data['id'] = msg['Message-ID']
+            logging.debug(f"Processing new email {i+1}/{len(new_ids)} with ID: {msg_id}")
+
+            email_data['id'] = msg_id
             email_data['subject'] = str(make_header(decode_header(msg['Subject'])))
             email_data['from'] = msg['From']
             date_str = msg['date'].replace(" (UTC)", "")  # Remove (UTC) if present
@@ -88,6 +126,9 @@ class EmailFetcher:
             body = self._get_text_from_email(msg)
             if body:
                 email_data['body'] = body.decode()
+
+            # Mark the email as read by setting the Seen flag
+            self.mail.store(email_id, '+FLAGS', '\\Seen')
 
             email_list.append(email_data)
 
