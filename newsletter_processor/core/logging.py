@@ -15,7 +15,7 @@ def setup_logging(
         "disable_existing_loggers": False,
         "formatters": {
             "json": {
-                "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+                "()": "pythonjsonlogger.json.JsonFormatter",
                 "format": "%(asctime)s %(name)s %(levelname)s %(message)s"
             },
             "standard": {

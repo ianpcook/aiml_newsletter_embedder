@@ -21,8 +21,10 @@ async def scheduled_email_check():
             settings.EMAIL_CHECK_INTERVAL
         )
         await processor.process_emails()
+    except ConnectionError as e:
+        logger.error(f"Email connection error: {str(e)}")
     except Exception as e:
-        logger.error(f"Error in scheduled email check: {str(e)}")
+        logger.error(f"Unexpected error in scheduled email check: {str(e)}")
 
 def start_scheduler():
     """Initialize and start the scheduler"""

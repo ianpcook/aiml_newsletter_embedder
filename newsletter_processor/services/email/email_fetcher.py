@@ -23,10 +23,13 @@ class EmailFetcher:
         self.email_address = email_address        
         self.mail = None
 
-    def connect(self) -> None:
+def connect(self) -> None:
+    try:
         self.mail = imaplib.IMAP4_SSL('imap.gmail.com')
         self.mail.login(self.email_address, self.password)
         self.mail.select('inbox')
+    except imaplib.IMAP4.error as e:
+        raise ConnectionError(f"Failed to connect to email server: {str(e)}")
     
     def disconnect(self) -> None:
         self.mail.logout()

@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -11,6 +12,20 @@ from ..services.scheduler import start_scheduler
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting newsletter processor service")
+    scheduler = start_scheduler()
+    app.state.scheduler = scheduler
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down newsletter processor service")
+    if hasattr(app.state, "scheduler"):
+        app.state.scheduler.shutdown()
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application"""
     setup_logging()
@@ -20,6 +35,7 @@ def create_app() -> FastAPI:
         title=settings.SERVICE_NAME,
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
         docs_url=f"{settings.API_V1_STR}/docs",
+        lifespan=lifespan
     )
 
     # Configure CORS
@@ -34,17 +50,5 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(search_router, prefix=settings.API_V1_STR, tags=["search"])
     app.include_router(admin_router, prefix=settings.API_V1_STR, tags=["admin"])
-
-    @app.on_event("startup")
-    async def startup_event():
-        logger.info("Starting newsletter processor service")
-        scheduler = start_scheduler()
-        app.state.scheduler = scheduler
-
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        logger.info("Shutting down newsletter processor service")
-        if hasattr(app.state, "scheduler"):
-            app.state.scheduler.shutdown()
 
     return app 
