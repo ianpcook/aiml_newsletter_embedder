@@ -68,5 +68,5 @@ if __name__ == "__main__":
     print_separator()
     
     # Example semantic search
-    search_term = "emotions"
+    search_term = "good Agent tutorials"
     search_by_text(search_term)
