@@ -30,7 +30,7 @@ class NewsletterProcessor:
             self.fetcher.connect()
             logger.info("Connected to email server")
             
-            emails = self.fetcher.fetch_emails("Newsletter", self.output_file)
+            emails = self.fetcher.fetch_emails(settings.EMAIL_LABEL, self.output_file)
             logger.info(f"Fetched {len(emails)} new emails")
             
             processed_count = 0
@@ -43,6 +43,11 @@ class NewsletterProcessor:
                 except Exception as e:
                     logger.error(f"Error processing email {email.get('id')}: {str(e)}")
                     continue
+            
+            # Save processed emails to file
+            if processed_count > 0:
+                self.fetcher.save_emails(emails, self.output_file)
+                logger.info(f"Saved {processed_count} processed emails to {self.output_file}")
             
             return processed_count
 

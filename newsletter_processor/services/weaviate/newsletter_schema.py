@@ -2,7 +2,6 @@ import weaviate
 import logging
 import argparse
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 client = weaviate.Client("http://localhost:8080")

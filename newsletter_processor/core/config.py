@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     WEAVIATE_API_KEY: Optional[str] = Field(None, env="WEAVIATE_API_KEY")
     
     # Email Configuration
+    EMAIL_ADDRESS: str = Field(..., env="EMAIL_ADDRESS")
+    EMAIL_PASSWORD: str = Field(..., env="EMAIL_PASSWORD")
+    EMAIL_LABEL: str = Field("_News/AIML", env="EMAIL_LABEL")
+    OUTPUT_FILE: str = Field("data/newsletter_records.json", env="OUTPUT_FILE")
+    ERROR_FILE: str = Field("data/errors.json", env="ERROR_FILE")
     EMAIL_CHECK_INTERVAL: int = Field(6, env="EMAIL_CHECK_INTERVAL")  # hours
     
     # OpenAI Configuration
