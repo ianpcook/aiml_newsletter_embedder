@@ -6,10 +6,9 @@ from .client import get_weaviate_client
 
 logger = logging.getLogger(__name__)
 
-client = get_weaviate_client()
-
 def get_existing_email_ids() -> Set[str]:
     """Get set of email IDs already in Weaviate"""
+    client = get_weaviate_client()
     try:
         result = client.query.get(
             "Newsletter", 
@@ -37,6 +36,14 @@ def get_existing_email_ids() -> Set[str]:
     return set()
 
 def load_data():
+    """Load newsletter data into Weaviate"""
+    client = get_weaviate_client()
+    
+    # Add diagnostic information
+    logger.info("Weaviate client information:")
+    logger.info(f"Client: {client.__class__.__module__}.{client.__class__.__name__}")
+    logger.info(f"Batch: {client.batch.__class__.__module__}.{client.batch.__class__.__name__}")
+    
     data_path = os.path.abspath(os.path.join(os.getcwd(), 'data', 'newsletter_records.json'))
     logger.info(f"Loading data from {data_path}")
     
@@ -46,6 +53,8 @@ def load_data():
     logger.info(f"Found {len(data)} total records in file")
     
     existing_ids = get_existing_email_ids()
+    logger.info(f"Found {len(existing_ids)} existing IDs in Weaviate")
+    
     new_records = [d for d in data if d['id'] not in existing_ids]
     logger.info(f"Loading {len(new_records)} new records out of {len(data)} total records")
 
@@ -54,54 +63,91 @@ def load_data():
         return
 
     successful_imports = 0
+    skipped_records = 0
+    batch_errors = []
     
-    # Configure batch settings for better performance and reliability
-    with client.batch(
-        batch_size=20,          # Reduced batch size
-        dynamic=True,           # Enable dynamic batching
-        num_workers=8,          # Use multiple workers
-        callback=lambda results: logger.info(
-            f"Batch processed with {len(results)} results"
-            + (f", with errors: {[str(err) for err in results if err]}" if any(results) else "")
-        )
-    ) as batch:
-        for d in new_records:
-            try:
-                # Extract sections if available, otherwise use full body
-                text_content = ""
-                if 'sections' in d and d['sections']:
-                    # Join all sections with newlines, excluding empty ones
-                    text_content = "\n\n".join(section.strip() for section in d['sections'] if section.strip())
-                elif 'body' in d and d['body']:
-                    text_content = d['body']
+    def batch_callback(results):
+        logger.debug(f"Batch callback received: type={type(results)}, value={results}")
+        nonlocal batch_errors
+        if results and isinstance(results, (list, tuple)):
+            errors = [str(err) for err in results if err is not None]
+            if errors:
+                batch_errors.extend(errors)
+                logger.error(f"Batch errors: {errors}")
+        logger.info(f"Batch processed: {len(results) if isinstance(results, (list, tuple)) else 0} items")
+        if isinstance(results, (list, tuple)):
+            logger.debug(f"Batch details: {results}")
+        else:
+            logger.debug(f"Unexpected results type: {type(results)}, value: {results}")
 
-                # Extract header/title from subject or first section
-                header = d.get('subject', '')
-                if not header and 'sections' in d and d['sections']:
-                    header = d['sections'][0].strip()
+    try:
+        logger.debug("About to initialize batch processing")
+        
+        with client.batch(
+            batch_size=2,
+            callback=batch_callback,
+            weaviate_error_retries=3,
+            connection_error_retries=3
+        ) as batch:
+            logger.debug("Successfully initialized batch context")
+            for d in new_records:
+                try:
+                    # Process record logic remains the same
+                    text_content = ""
+                    if 'sections' in d and d['sections']:
+                        text_content = "\n\n".join(section.strip() for section in d['sections'] if section.strip())
+                    elif 'body' in d and d['body']:
+                        text_content = d['body']
 
-                properties = {
-                    "newsletter": d.get("from", "Unknown Newsletter").split('<')[0].strip(),  # Get name part of email
-                    "sender": d.get("from", ""),
-                    "header": header,
-                    "received_date": d.get("date", ""),
-                    "links": [],  # Links will be extracted in future enhancement
-                    "text_content": text_content,
-                    "email_id": d.get("id", "")
-                }
-                
-                if not properties["email_id"]:
-                    logger.warning(f"Skipping record due to missing ID")
-                    continue
+                    if not text_content.strip():
+                        logger.warning(f"Skipping record {d.get('id', 'unknown')} due to empty content")
+                        skipped_records += 1
+                        continue
+
+                    header = d.get('subject', '')
+                    if not header and 'sections' in d and d['sections']:
+                        header = d['sections'][0].strip()
+
+                    if not header.strip():
+                        logger.warning(f"Skipping record {d.get('id', 'unknown')} due to empty header")
+                        skipped_records += 1
+                        continue
+
+                    properties = {
+                        "newsletter": d.get("from", "Unknown Newsletter").split('<')[0].strip(),
+                        "sender": d.get("from", ""),
+                        "header": header,
+                        "received_date": d.get("date", ""),
+                        "links": [],
+                        "text_content": text_content,
+                        "email_id": d.get("id", "")
+                    }
                     
-                batch.add_data_object(properties, "Newsletter")
-                successful_imports += 1
-                
-                # Log progress every 10 records
-                if successful_imports % 10 == 0:
-                    logger.info(f"Progress: {successful_imports}/{len(new_records)} records processed")
+                    if not properties["email_id"]:
+                        logger.warning(f"Skipping record due to missing ID")
+                        skipped_records += 1
+                        continue
+                        
+                    batch.add_data_object(properties, "Newsletter")
+                    successful_imports += 1
                     
-            except Exception as e:
-                logger.error(f"Error importing record {d.get('id', 'unknown')}: {str(e)}")
+                    if successful_imports % 10 == 0:
+                        logger.info(f"Progress: {successful_imports}/{len(new_records)} records processed")
+                        
+                except Exception as e:
+                    logger.error(f"Error importing record {d.get('id', 'unknown')}: {str(e)}")
+                    skipped_records += 1
 
-    logger.info(f"Successfully embedded {successful_imports} out of {len(new_records)} new records into Weaviate")
+    except Exception as e:
+        logger.error(f"Batch processing failed: {str(e)}")
+        raise
+
+    finally:
+        logger.info(f"Import summary:")
+        logger.info(f"- Successfully embedded: {successful_imports}")
+        logger.info(f"- Skipped records: {skipped_records}")
+        logger.info(f"- Batch errors: {len(batch_errors)}")
+        if batch_errors:
+            logger.info("Sample of batch errors:")
+            for error in batch_errors[:5]:
+                logger.info(f"  - {error}")

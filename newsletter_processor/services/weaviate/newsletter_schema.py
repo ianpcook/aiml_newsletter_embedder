@@ -1,10 +1,12 @@
 import weaviate
 import logging
-import argparse
+import os
+from ..weaviate.client import get_weaviate_client
 
 logger = logging.getLogger(__name__)
 
-client = weaviate.Client("http://localhost:8080")
+# Use the client from the shared client module
+client = get_weaviate_client()
 
 def clear_schema():
     """Delete the Newsletter class if it exists"""
@@ -21,7 +23,7 @@ def create_schema_if_not_exists():
         schema = client.schema.get()
         if any(class_obj["class"] == "Newsletter" for class_obj in schema["classes"]):
             logger.info("Newsletter schema already exists")
-            return
+            return {"status": "success", "message": "Newsletter schema already exists"}
     except Exception as e:
         logger.warning(f"Error checking schema: {e}")
 
@@ -95,6 +97,7 @@ def create_schema_if_not_exists():
 
     logger.info("Creating Newsletter schema")
     client.schema.create_class(newsletter_class_obj)
+    return {"status": "success", "message": "Schema created successfully"}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -1,11 +1,29 @@
 services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - WEAVIATE_URL=http://weaviate:8080
+      - EMAIL_CHECK_INTERVAL=6
+    env_file:
+      - .env
+    depends_on:
+      - weaviate
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 12h
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+
   weaviate:
     image: semitechnologies/weaviate:1.24.1
-    restart: unless-stopped
     ports:
       - "8080:8080"
-    volumes:
-      - weaviate-data:/data
     environment:
       QUERY_DEFAULTS_LIMIT: 20
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
@@ -14,9 +32,11 @@ services:
       ENABLE_MODULES: text2vec-transformers
       TRANSFORMERS_INFERENCE_API: http://t2v-transformers:8080
       CLUSTER_HOSTNAME: 'node1'
+    volumes:
+      - weaviate_data:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/v1/.well-known/ready"]
-      interval: 30s
+      interval: 12h
       timeout: 10s
       retries: 3
 
@@ -24,18 +44,16 @@ services:
     image: semitechnologies/transformers-inference:sentence-transformers-msmarco-distilroberta-base-v2
     environment:
       ENABLE_CUDA: 0
-    ports:
-      - "9090:8080"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ready"]
+      interval: 12h
       timeout: 10s
       retries: 3
 
 volumes:
-  weaviate-data:
-    name: weaviate-data
+  weaviate_data:
+    name: aiml_newsletter_embedder_weaviate_data
 
 networks:
   default:
-    name: weaviate-network
+    name: aiml_newsletter_embedder_network

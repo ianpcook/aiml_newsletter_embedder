@@ -34,23 +34,46 @@ class NewsletterProcessor:
             logger.info(f"Fetched {len(emails)} new emails")
             
             processed_count = 0
+            skipped_count = 0
+            error_count = 0
+            
             for email in emails:
                 try:
-                    if email.get('body'):
+                    if not email.get('body'):
+                        logger.warning(f"Skipping email {email.get('id')} - No body content")
+                        skipped_count += 1
+                        continue
+                        
+                    try:
                         sections = self.splitter.parse(email['body'])
+                        if not sections:
+                            logger.warning(f"Skipping email {email.get('id')} - No sections parsed")
+                            skipped_count += 1
+                            continue
+                            
                         email['sections'] = sections
                         processed_count += 1
+                        
+                    except Exception as e:
+                        logger.error(f"Error parsing sections for email {email.get('id')}: {str(e)}")
+                        error_count += 1
+                        continue
+                        
                 except Exception as e:
                     logger.error(f"Error processing email {email.get('id')}: {str(e)}")
+                    error_count += 1
                     continue
             
             # Save processed emails to file
-            if processed_count > 0:
+            if len(emails) > 0:
                 self.fetcher.save_emails(emails, self.output_file)
-                logger.info(f"Saved {processed_count} processed emails to {self.output_file}")
+                logger.info(f"Email processing summary:")
+                logger.info(f"- Successfully processed: {processed_count}")
+                logger.info(f"- Skipped: {skipped_count}")
+                logger.info(f"- Errors: {error_count}")
             
             return processed_count
-
+            
         except Exception as e:
             logger.error(f"Email processing failed: {str(e)}")
             raise

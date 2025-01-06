@@ -2,8 +2,7 @@
 name = "aiml_newsletter_embedder"
 version = "0.1.0"
 description = "AI/ML Newsletter processor and semantic search engine using vector embeddings"
-authors = ["Your Name <your.email@example.com>"]
-readme = "README.md"
+authors = ["Ian P. Cook <ianpcook@gmail.com>"]
 packages = [
     { include = "newsletter_processor" }
 ]

@@ -10,16 +10,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
-RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV POETRY_HOME=/opt/poetry
+ENV POETRY_VERSION=1.5.1
+ENV PATH="/opt/poetry/bin:$PATH"
+
+RUN curl -sSL https://install.python-poetry.org | python3 - --version ${POETRY_VERSION} \
+    && poetry config virtualenvs.create false
 
 # Copy project files
 COPY pyproject.toml poetry.lock ./
+COPY main.py ./
 COPY newsletter_processor/ ./newsletter_processor/
 COPY scripts/ ./scripts/
 
 # Install dependencies
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-dev --no-interaction --no-ansi
+RUN poetry install --no-dev --no-interaction --no-ansi
 
 # Make scripts executable
 RUN chmod +x ./scripts/start.sh ./scripts/healthcheck.sh

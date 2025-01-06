@@ -2,19 +2,19 @@ import json
 from datetime import datetime
 from .client import get_weaviate_client
 
-client = get_weaviate_client()
-
 # Define all available fields
 NEWSLETTER_FIELDS = ["newsletter", "sender", "header", "received_date", "links", "text_content", "email_id"]
 
 def get_total_count():
     """Get the total number of records in the Newsletter class"""
+    client = get_weaviate_client()
     result = client.query.aggregate("Newsletter").with_meta_count().do()
     count = result['data']['Aggregate']['Newsletter'][0]['meta']['count']
     return count
 
 def get_recent_records(limit=5):
     """Get the most recent newsletter records"""
+    client = get_weaviate_client()
     result = client.query.get(
         "Newsletter", 
         ["newsletter", "header", "received_date", "sender", "text_content"]
@@ -31,6 +31,7 @@ def get_recent_records(limit=5):
 
 def search_by_text(search_term, fields=None, limit=3):
     """Search newsletters by content"""
+    client = get_weaviate_client()
     if fields is None:
         fields = ["header", "text_content", "received_date"]
     
