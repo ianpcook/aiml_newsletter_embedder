@@ -1,0 +1,95 @@
+{
+  "info": {
+    "name": "Newsletter Embedder API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Admin Endpoints",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Get Newsletter Count",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/count",
+              "host": ["{{base_url}}"],
+              "path": ["count"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Emails",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["refresh"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search Endpoints",
+      "item": [
+        {
+          "name": "Search Newsletters",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/search",
+              "host": ["{{base_url}}"],
+              "path": ["search"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"your search query\",\n  \"limit\": 5,\n  \"fields\": [\"header\", \"text_content\", \"received_date\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get Recent Newsletters",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/recent?limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["recent"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api/v1",
+      "type": "string"
+    }
+  ]
+}

@@ -23,11 +23,11 @@ def get_existing_email_ids() -> Set[str]:
                 if '_additional' in item and 'id' in item['_additional']:
                     existing.add(item['_additional']['id'])
                     
-            logger.info(f"Found {len(existing)} existing records in Weaviate")
+            logger.info(f"Found {len(existing)} unique identifiers in Weaviate (includes both email_ids and internal Weaviate IDs)")
             
             count_result = client.query.aggregate("Newsletter").with_meta_count().do()
             total_count = count_result['data']['Aggregate']['Newsletter'][0]['meta']['count']
-            logger.info(f"Total records in Weaviate: {total_count}")
+            logger.info(f"Actual number of unique records in Weaviate: {total_count}")
             
         return existing
     except Exception as e:
@@ -45,54 +45,53 @@ def load_data():
     logger.info(f"Batch: {client.batch.__class__.__module__}.{client.batch.__class__.__name__}")
     
     data_path = os.path.abspath(os.path.join(os.getcwd(), 'data', 'newsletter_records.json'))
+    error_path = os.path.abspath(os.path.join(os.getcwd(), 'data', 'error_records.json'))
     logger.info(f"Loading data from {data_path}")
     
     with open(data_path, 'r') as f:
         data = json.load(f)
     
-    logger.info(f"Found {len(data)} total records in file")
+    # Load existing error records if any
+    error_records = {}
+    if os.path.exists(error_path):
+        try:
+            with open(error_path, 'r') as f:
+                error_records = json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load error records: {e}")
     
+    logger.info(f"Found {len(data)} newsletter records in the JSON file")
+    logger.info(f"Found {len(error_records)} existing error records")
+    
+    # Get records actually in Weaviate
     existing_ids = get_existing_email_ids()
-    logger.info(f"Found {len(existing_ids)} existing IDs in Weaviate")
+    logger.info(f"Found {len(existing_ids)} existing identifiers in Weaviate database")
     
-    new_records = [d for d in data if d['id'] not in existing_ids]
-    logger.info(f"Loading {len(new_records)} new records out of {len(data)} total records")
+    # Include both records not in Weaviate and records that previously errored
+    new_records = [d for d in data if d['id'] not in existing_ids or d['id'] in error_records]
+    logger.info(f"Will attempt to load {len(new_records)} records (not in Weaviate or previously errored)")
 
     if not new_records:
         logger.info("No new records to load")
+        if error_records:
+            # Clear error records since everything is loaded
+            with open(error_path, 'w') as f:
+                json.dump({}, f)
         return
 
     successful_imports = 0
-    skipped_records = 0
-    batch_errors = []
+    current_errors = {}
     
-    def batch_callback(results):
-        logger.debug(f"Batch callback received: type={type(results)}, value={results}")
-        nonlocal batch_errors
-        if results and isinstance(results, (list, tuple)):
-            errors = [str(err) for err in results if err is not None]
-            if errors:
-                batch_errors.extend(errors)
-                logger.error(f"Batch errors: {errors}")
-        logger.info(f"Batch processed: {len(results) if isinstance(results, (list, tuple)) else 0} items")
-        if isinstance(results, (list, tuple)):
-            logger.debug(f"Batch details: {results}")
-        else:
-            logger.debug(f"Unexpected results type: {type(results)}, value: {results}")
-
     try:
-        logger.debug("About to initialize batch processing")
-        
         with client.batch(
             batch_size=2,
-            callback=batch_callback,
-            weaviate_error_retries=3,
-            connection_error_retries=3
+            dynamic=True,
+            num_workers=1,
+            num_retries=3
         ) as batch:
             logger.debug("Successfully initialized batch context")
             for d in new_records:
                 try:
-                    # Process record logic remains the same
                     text_content = ""
                     if 'sections' in d and d['sections']:
                         text_content = "\n\n".join(section.strip() for section in d['sections'] if section.strip())
@@ -101,7 +100,7 @@ def load_data():
 
                     if not text_content.strip():
                         logger.warning(f"Skipping record {d.get('id', 'unknown')} due to empty content")
-                        skipped_records += 1
+                        current_errors[d['id']] = "Empty content"
                         continue
 
                     header = d.get('subject', '')
@@ -110,7 +109,7 @@ def load_data():
 
                     if not header.strip():
                         logger.warning(f"Skipping record {d.get('id', 'unknown')} due to empty header")
-                        skipped_records += 1
+                        current_errors[d['id']] = "Empty header"
                         continue
 
                     properties = {
@@ -125,29 +124,39 @@ def load_data():
                     
                     if not properties["email_id"]:
                         logger.warning(f"Skipping record due to missing ID")
-                        skipped_records += 1
+                        current_errors[d['id']] = "Missing ID"
                         continue
                         
-                    batch.add_data_object(properties, "Newsletter")
+                    batch.add_data_object(
+                        data_object=properties,
+                        class_name="Newsletter"
+                    )
                     successful_imports += 1
                     
                     if successful_imports % 10 == 0:
                         logger.info(f"Progress: {successful_imports}/{len(new_records)} records processed")
                         
                 except Exception as e:
-                    logger.error(f"Error importing record {d.get('id', 'unknown')}: {str(e)}")
-                    skipped_records += 1
+                    error_msg = str(e)
+                    logger.error(f"Error importing record {d.get('id', 'unknown')}: {error_msg}")
+                    current_errors[d['id']] = error_msg
 
     except Exception as e:
-        logger.error(f"Batch processing failed: {str(e)}")
-        raise
-
+        error_msg = str(e)
+        logger.error(f"Batch processing failed: {error_msg}")
+        # Add all remaining records to errors
+        for d in new_records[successful_imports:]:
+            current_errors[d['id']] = f"Batch failure: {error_msg}"
     finally:
+        # Update error records file
+        if current_errors:
+            with open(error_path, 'w') as f:
+                json.dump(current_errors, f, indent=2)
+        elif os.path.exists(error_path):
+            # If no errors and file exists, clear it
+            with open(error_path, 'w') as f:
+                json.dump({}, f)
+                
         logger.info(f"Import summary:")
         logger.info(f"- Successfully embedded: {successful_imports}")
-        logger.info(f"- Skipped records: {skipped_records}")
-        logger.info(f"- Batch errors: {len(batch_errors)}")
-        if batch_errors:
-            logger.info("Sample of batch errors:")
-            for error in batch_errors[:5]:
-                logger.info(f"  - {error}")
+        logger.info(f"- Failed records: {len(current_errors)}")

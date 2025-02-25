@@ -18,7 +18,7 @@ async def health_check():
     """Health check endpoint"""
     try:
         client = get_weaviate_client()
-        if not client.is_ready:
+        if not client.is_ready():
             return {"status": "degraded", "message": "Weaviate not ready"}
         return {"status": "healthy"}
     except Exception:
@@ -29,7 +29,7 @@ async def get_newsletter_count():
     """Get total number of newsletters in the database"""
     try:
         client = get_weaviate_client()
-        if not client.is_ready:
+        if not client.is_ready():
             raise HTTPException(
                 status_code=503,
                 detail="Weaviate service is not ready"
@@ -49,7 +49,7 @@ async def refresh_emails():
     """Manually trigger email processing"""
     try:
         client = get_weaviate_client()
-        if not client.is_ready:
+        if not client.is_ready():
             raise HTTPException(
                 status_code=503,
                 detail="Weaviate service is not ready"
@@ -84,7 +84,7 @@ async def initialize_schema():
     """Initialize the Weaviate schema"""
     try:
         client = get_weaviate_client()
-        if not client.is_ready:
+        if not client.is_ready():
             raise HTTPException(
                 status_code=503,
                 detail="Weaviate service is not ready"
